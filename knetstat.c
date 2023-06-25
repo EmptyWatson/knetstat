@@ -31,6 +31,16 @@
 
 #include <net/net_namespace.h>
 
+#include "toa.h"
+
+#define KNETSTAT_INFO(msg...)				\
+	do {						\
+		if (net_ratelimit())			\
+			printk(KERN_INFO "TOA: " msg);	\
+	} while (0)
+
+unsigned long sk_data_ready_addr = 0;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
 #define tcp_time_stamp tcp_time_stamp_raw()
 #endif
@@ -104,9 +114,46 @@ static void addr_port_show(struct seq_file *seq, sa_family_t family, const void*
 	seq_pad(seq, pad_end, ' ');
 }
 
+// 打印tcp option address字段，如果存在
+static void sock_tcp_option_address_show(struct seq_file *seq, sa_family_t family, struct sock *sk) {
+	size_t pad_end = seq->count + 23;
+	struct toa_data tdata;
+	// 不支持ipv6，直接可以返回
+	if(family == AF_INET6 ){
+		seq_puts(seq, "--ipv6--");
+		seq_pad(seq, pad_end, ' ');
+		return;
+	}
+
+	// 检查合法性
+	if (sk_data_ready_addr == (unsigned long) sk->sk_data_ready) {
+		memcpy(&tdata, &sk->sk_user_data, sizeof(tdata));
+		if (TCPOPT_TOA == tdata.opcode &&
+			TCPOLEN_TOA == tdata.opsize) {
+			seq_printf(seq, "%pI4", (void *)&tdata.ip);
+			if (tdata.port == 0) {
+				seq_puts(seq, ":*");
+			} else {
+				seq_printf(seq, ":%d", ntohs(tdata.port));
+			}
+		} else { /* sk_user_data doesn't belong to us */
+			KNETSTAT_INFO("invalid toa data, "
+				"ip %u.%u.%u.%u port %u opcode %u "
+				"opsize %u\n",
+				NIPQUAD(tdata.ip), ntohs(tdata.port),
+				tdata.opcode, tdata.opsize);
+			seq_puts(seq, "--none--");
+		}
+	}
+	else{
+		seq_puts(seq, "--error--");
+	}
+	seq_pad(seq, pad_end, ' ');
+}
+
 static int tcp_seq_show(struct seq_file *seq, void *v) {
 	if (v == SEQ_START_TOKEN) {
-		seq_printf(seq, "Recv-Q Send-Q Local Address           Foreign Address         Stat Diag Options\n");
+		seq_printf(seq, "Recv-Q Send-Q Local Address           Foreign Address         TOA Address             Stat      Diag Options\n");
 	} else {
 		struct tcp_iter_state *st = seq->private;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0)
@@ -228,6 +275,7 @@ static int tcp_seq_show(struct seq_file *seq, void *v) {
 		seq_printf(seq, "%6d %6d ", rx_queue, tx_queue);
 		addr_port_show(seq, family, src, srcp);
 		addr_port_show(seq, family, dest, destp);
+		sock_tcp_option_address_show(seq, family, sk);
 
 		seq_printf(seq, "%s ", tcp_state_names[state]);
 		if (sk != NULL) {
@@ -514,6 +562,17 @@ static struct pernet_operations knetstat_net_ops = { .init = knetstat_net_init,
 
 static int knetstat_init(void) {
 	int err;
+
+	/* get the address of function sock_def_readable
+	 * so later we can know whether the sock is for rpc, tux or others
+	 */
+	sk_data_ready_addr = kallsyms_lookup_name("sock_def_readable");
+	KNETSTAT_INFO("CPU [%u] sk_data_ready_addr = "
+		"kallsyms_lookup_name(sock_def_readable) = %lu\n",
+		 smp_processor_id(), sk_data_ready_addr);
+	if (0 == sk_data_ready_addr) {
+		KNETSTAT_INFO("cannot find sock_def_readable.\n");
+	}
 
 	err = register_pernet_subsys(&knetstat_net_ops);
 	if (err < 0)
