@@ -52,6 +52,22 @@ static const char *const tcp_state_names[] = {
 		"SYNR"
 };
 
+void seq_pad(struct seq_file *m, size_t pad_end, char c)
+{
+	int size = pad_end - m->count;
+	if (size > 0) {
+		if (size + m->count > m->size) {
+			//seq_set_overflow(m);
+			m->count = m->size;
+			return;
+		}
+		memset(m->buf + m->count, ' ', size);
+		m->count += size;
+	}
+	if (c)
+		seq_putc(m, c);
+}
+
 static void sock_common_options_show(struct seq_file *seq, struct sock *sk) {
 	// Note:
 	//  * Linux actually doubles the values for SO_RCVBUF and SO_SNDBUF (see sock_setsockopt in net/core/sock.c)
@@ -76,14 +92,16 @@ static void sock_common_options_show(struct seq_file *seq, struct sock *sk) {
 }
 
 static void addr_port_show(struct seq_file *seq, sa_family_t family, const void* addr, __u16 port) {
-	seq_setwidth(seq, 23);
+	//seq_setwidth(seq, 23);
+	size_t pad_end = seq->count + 23;
 	seq_printf(seq, family == AF_INET6 ? "%pI6c" : "%pI4", addr);
 	if (port == 0) {
 		seq_puts(seq, ":*");
 	} else {
 		seq_printf(seq, ":%d", port);
 	}
-	seq_pad(seq, ' ');
+	//seq_pad(seq, ' ');
+	seq_pad(seq, pad_end, ' ');
 }
 
 static int tcp_seq_show(struct seq_file *seq, void *v) {
@@ -213,7 +231,8 @@ static int tcp_seq_show(struct seq_file *seq, void *v) {
 
 		seq_printf(seq, "%s ", tcp_state_names[state]);
 		if (sk != NULL) {
-			seq_setwidth(seq, 4);
+			//seq_setwidth(seq, 4);
+			size_t pad_end = seq->count + 4;
 			if (state == TCP_ESTABLISHED) {
 				const struct tcp_sock *tp = tcp_sk(sk);
 				if (tp->rcv_wnd == 0 && tp->snd_wnd == 0) {
@@ -231,8 +250,8 @@ static int tcp_seq_show(struct seq_file *seq, void *v) {
 					seq_puts(seq, ">#");
 				}
 			}
-			seq_pad(seq, ' ');
-
+			//seq_pad(seq, ' ');
+			seq_pad(seq, pad_end, ' ');
 
 			seq_printf(seq, "SO_REUSEADDR=%d,SO_REUSEPORT=%d,SO_KEEPALIVE=%d", sk->sk_reuse, sk->sk_reuseport, sock_flag(sk, SOCK_KEEPOPEN));
                         if (tcp_sk(sk)->keepalive_time > 0) {
