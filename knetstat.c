@@ -64,8 +64,6 @@ static const char *const tcp_state_names[] = {
 
 void seq_pad(struct seq_file *m, size_t pad_end, char c)
 {
-	seq_puts(m, "\t");
-	return ;
 	if(pad_end < m->count){
 		return;
 	}
@@ -126,6 +124,12 @@ static void sock_tcp_option_address_show(struct seq_file *seq, sa_family_t famil
 	// 不支持ipv6，直接可以返回
 	if(family == AF_INET6 ){
 		seq_puts(seq, "--ipv6--");
+		seq_pad(seq, pad_end, ' ');
+		return;
+	}
+
+	if(NULL == sk){
+		seq_puts(seq, "--null sk--");
 		seq_pad(seq, pad_end, ' ');
 		return;
 	}
