@@ -64,7 +64,12 @@ static const char *const tcp_state_names[] = {
 
 void seq_pad(struct seq_file *m, size_t pad_end, char c)
 {
-	int size = pad_end - m->count;
+	seq_puts(m, "\t");
+	return ;
+	if(pad_end < m->count){
+		return;
+	}
+	int64_t size = pad_end - m->count;
 	if (size > 0) {
 		if (size + m->count > m->size) {
 			//seq_set_overflow(m);
@@ -128,6 +133,7 @@ static void sock_tcp_option_address_show(struct seq_file *seq, sa_family_t famil
 	// 检查合法性
 	if ((sk_data_ready_addr == (unsigned long) sk->sk_data_ready)
 		 && NULL != sk->sk_user_data){
+		memset(&tdata, 0, sizeof(tdata));
 		memcpy(&tdata, &sk->sk_user_data, sizeof(tdata));
 		if (TCPOPT_TOA == tdata.opcode &&
 			TCPOLEN_TOA == tdata.opsize) {
