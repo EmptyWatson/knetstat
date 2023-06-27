@@ -157,7 +157,7 @@ static void sock_tcp_option_address_show(struct seq_file *seq, sa_family_t famil
 		}
 	}
 	else{
-		seq_puts(seq, "--error--");
+		seq_puts(seq, "--null--");
 	}
 	seq_pad(seq, pad_end, ' ');
 }
